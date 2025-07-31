@@ -17,6 +17,9 @@
     canvas {
       max-height: 300px;
     }
+    .modalidade {
+      margin-top: 40px;
+    }
   </style>
 </head>
 <body>
@@ -38,8 +41,7 @@
       </div>
     </div>
 
-    <div id="indicadores" class="row"></div>
-    <div id="graficos" class="row"></div>
+    <div id="painelModalidades"></div>
   </div>
 
   <script>
@@ -55,12 +57,7 @@
     ];
 
     function normalizarTexto(texto) {
-      return texto
-        .toUpperCase()
-        .normalize("NFD")
-        .replace(/\p{Diacritic}/gu, "")
-        .replace(/\s+/g, " ")
-        .trim();
+      return texto?.toUpperCase()?.normalize("NFD")?.replace(/\p{Diacritic}/gu, "")?.replace(/\s+/g, " ")?.trim();
     }
 
     document.getElementById("csvFile").addEventListener("change", function (e) {
@@ -117,12 +114,13 @@
         (cidadeFiltro === "" || (d["EM QUAL CIDADE MORA?"] || d["EM QUAL CIDADE MORA"] || "") === cidadeFiltro)
       );
 
-      document.getElementById("indicadores").innerHTML = "";
-      document.getElementById("graficos").innerHTML = "";
+      const container = document.getElementById("painelModalidades");
+      container.innerHTML = "";
 
       perguntasOriginais.forEach(perguntaOriginal => {
         const perguntaNorm = normalizarTexto(perguntaOriginal);
         const respostas = {};
+
         filtrados.forEach(d => {
           const r = d[perguntaNorm];
           if (!respostas[r]) respostas[r] = 0;
@@ -134,32 +132,31 @@
         const bom = respostas["Bom"] || respostas["BOM"] || 0;
         const ruim = respostas["Ruim"] || respostas["RUIM"] || 0;
 
-        const card = `
-          <div class="col-md-4">
-            <div class="card">
-              <div class="card-body">
-                <h5 class="card-title">${perguntaOriginal}</h5>
-                <p>👍 Ótimo: ${((otimos / total) * 100).toFixed(1) || 0}%</p>
-                <p>👌 Bom: ${((bom / total) * 100).toFixed(1) || 0}%</p>
-                <p>👎 Ruim: ${((ruim / total) * 100).toFixed(1) || 0}%</p>
+        const bloco = document.createElement("div");
+        bloco.className = "modalidade";
+        bloco.innerHTML = `
+          <h4>${perguntaOriginal}</h4>
+          <div class="row">
+            <div class="col-md-4">
+              <div class="card">
+                <div class="card-body">
+                  <h6 class="card-subtitle mb-2">Indicadores</h6>
+                  <p>👍 Ótimo: ${((otimos / total) * 100).toFixed(1) || 0}%</p>
+                  <p>👌 Bom: ${((bom / total) * 100).toFixed(1) || 0}%</p>
+                  <p>👎 Ruim: ${((ruim / total) * 100).toFixed(1) || 0}%</p>
+                </div>
               </div>
             </div>
-          </div>`;
-        document.getElementById("indicadores").innerHTML += card;
+            <div class="col-md-8">
+              <canvas id="${perguntaNorm.replace(/[^a-zA-Z0-9]/g, "")}"></canvas>
+            </div>
+          </div>
+        `;
 
-        const canvasId = perguntaNorm.replace(/[^a-zA-Z0-9]/g, "");
-        const grafico = `
-          <div class="col-md-6">
-            <div class="card">
-              <div class="card-body">
-                <canvas id="${canvasId}"></canvas>
-              </div>
-            </div>
-          </div>`;
-        document.getElementById("graficos").innerHTML += grafico;
+        container.appendChild(bloco);
 
         setTimeout(() => {
-          new Chart(document.getElementById(canvasId), {
+          new Chart(document.getElementById(perguntaNorm.replace(/[^a-zA-Z0-9]/g, "")), {
             type: 'bar',
             data: {
               labels: Object.keys(respostas),
