@@ -44,7 +44,7 @@
 
   <script>
     let dados = [];
-    let perguntas = [
+    const perguntasOriginais = [
       "O QUE ACHOU DO NOSSO AMBIENTE?",
       "O QUE ACHOU DA ILUMINAÇÃO?",
       "COMO ESTAVA A COMIDA?",
@@ -53,6 +53,15 @@
       "O QUE ACHOU DA CLIMATIZAÇÃO?",
       "O QUE ACHOU DAS BEBIDAS?"
     ];
+
+    function normalizarTexto(texto) {
+      return texto
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    }
 
     document.getElementById("csvFile").addEventListener("change", function (e) {
       const file = e.target.files[0];
@@ -67,8 +76,8 @@
     });
 
     function parseCSV(csv, fileName) {
-      const lines = csv.split("\n");
-      const headers = lines[0].split(",");
+      const lines = csv.split("\n").filter(l => l.trim().length > 0);
+      const headers = lines[0].split(",").map(h => normalizarTexto(h));
       const empresa = fileName.replace(".csv", "").trim();
 
       for (let i = 1; i < lines.length; i++) {
@@ -76,7 +85,7 @@
         if (cols.length === headers.length) {
           let entry = { Empresa: empresa };
           for (let j = 0; j < headers.length; j++) {
-            entry[headers[j].trim()] = cols[j].trim();
+            entry[headers[j]] = cols[j].trim();
           }
           dados.push(entry);
         }
@@ -88,7 +97,7 @@
 
     function atualizarFiltros() {
       const empresas = [...new Set(dados.map(d => d.Empresa))];
-      const cidades = [...new Set(dados.map(d => d["EM QUAL CIDADE MORA?"]))];
+      const cidades = [...new Set(dados.map(d => d["EM QUAL CIDADE MORA?"] || d["EM QUAL CIDADE MORA"] || "").filter(c => c !== ""))];
 
       const empresaSelect = document.getElementById("empresaSelect");
       empresaSelect.innerHTML = '<option value="">Todas</option>' + empresas.map(e => `<option>${e}</option>`).join("");
@@ -105,31 +114,31 @@
       const cidadeFiltro = document.getElementById("cidadeSelect").value;
       const filtrados = dados.filter(d =>
         (empresaFiltro === "" || d.Empresa === empresaFiltro) &&
-        (cidadeFiltro === "" || d["EM QUAL CIDADE MORA?"] === cidadeFiltro)
+        (cidadeFiltro === "" || (d["EM QUAL CIDADE MORA?"] || d["EM QUAL CIDADE MORA"] || "") === cidadeFiltro)
       );
 
       document.getElementById("indicadores").innerHTML = "";
       document.getElementById("graficos").innerHTML = "";
 
-      perguntas.forEach(pergunta => {
+      perguntasOriginais.forEach(perguntaOriginal => {
+        const perguntaNorm = normalizarTexto(perguntaOriginal);
         const respostas = {};
         filtrados.forEach(d => {
-          const r = d[pergunta];
+          const r = d[perguntaNorm];
           if (!respostas[r]) respostas[r] = 0;
           respostas[r]++;
         });
 
-        // Indicadores
         const total = Object.values(respostas).reduce((a, b) => a + b, 0);
-        const otimos = respostas["Ótimo"] || 0;
-        const bom = respostas["Bom"] || 0;
-        const ruim = respostas["Ruim"] || 0;
+        const otimos = respostas["Ótimo"] || respostas["OTIMO"] || 0;
+        const bom = respostas["Bom"] || respostas["BOM"] || 0;
+        const ruim = respostas["Ruim"] || respostas["RUIM"] || 0;
 
         const card = `
           <div class="col-md-4">
             <div class="card">
               <div class="card-body">
-                <h5 class="card-title">${pergunta}</h5>
+                <h5 class="card-title">${perguntaOriginal}</h5>
                 <p>👍 Ótimo: ${((otimos / total) * 100).toFixed(1) || 0}%</p>
                 <p>👌 Bom: ${((bom / total) * 100).toFixed(1) || 0}%</p>
                 <p>👎 Ruim: ${((ruim / total) * 100).toFixed(1) || 0}%</p>
@@ -138,8 +147,7 @@
           </div>`;
         document.getElementById("indicadores").innerHTML += card;
 
-        // Gráfico
-        const canvasId = pergunta.replace(/[^a-zA-Z0-9]/g, "");
+        const canvasId = perguntaNorm.replace(/[^a-zA-Z0-9]/g, "");
         const grafico = `
           <div class="col-md-6">
             <div class="card">
@@ -156,9 +164,9 @@
             data: {
               labels: Object.keys(respostas),
               datasets: [{
-                label: pergunta,
+                label: perguntaOriginal,
                 data: Object.values(respostas),
-                backgroundColor: 'rgba(54, 162, 235, 0.6)'
+                backgroundColor: 'rgba(75, 192, 192, 0.6)'
               }]
             },
             options: {
