@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Painel de Pesquisa de Satisfação</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      padding: 20px;
+      background-color: #f8f9fa;
+    }
+    .card {
+      margin-bottom: 20px;
+    }
+    canvas {
+      max-height: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2 class="mb-4">Painel de Satisfação 📊</h2>
+
+    <div class="row mb-3">
+      <div class="col-md-4">
+        <label for="empresaSelect" class="form-label">Empresa:</label>
+        <select id="empresaSelect" class="form-select"></select>
+      </div>
+      <div class="col-md-4">
+        <label for="cidadeSelect" class="form-label">Cidade:</label>
+        <select id="cidadeSelect" class="form-select"></select>
+      </div>
+      <div class="col-md-4">
+        <label for="csvFile" class="form-label">Importar CSV:</label>
+        <input type="file" id="csvFile" class="form-control" accept=".csv">
+      </div>
+    </div>
+
+    <div id="indicadores" class="row"></div>
+    <div id="graficos" class="row"></div>
+  </div>
+
+  <script>
+    let dados = [];
+    let perguntas = [
+      "O QUE ACHOU DO NOSSO AMBIENTE?",
+      "O QUE ACHOU DA ILUMINAÇÃO?",
+      "COMO ESTAVA A COMIDA?",
+      "COMO ESTAVA A MÚSICA?",
+      "COMO AVALIA O ATENDIMENTO RECEBIDO?",
+      "O QUE ACHOU DA CLIMATIZAÇÃO?",
+      "O QUE ACHOU DAS BEBIDAS?"
+    ];
+
+    document.getElementById("csvFile").addEventListener("change", function (e) {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const text = e.target.result;
+          parseCSV(text, file.name);
+        };
+        reader.readAsText(file);
+      }
+    });
+
+    function parseCSV(csv, fileName) {
+      const lines = csv.split("\n");
+      const headers = lines[0].split(",");
+      const empresa = fileName.replace(".csv", "").trim();
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(",");
+        if (cols.length === headers.length) {
+          let entry = { Empresa: empresa };
+          for (let j = 0; j < headers.length; j++) {
+            entry[headers[j].trim()] = cols[j].trim();
+          }
+          dados.push(entry);
+        }
+      }
+
+      atualizarFiltros();
+      atualizarPainel();
+    }
+
+    function atualizarFiltros() {
+      const empresas = [...new Set(dados.map(d => d.Empresa))];
+      const cidades = [...new Set(dados.map(d => d["EM QUAL CIDADE MORA?"]))];
+
+      const empresaSelect = document.getElementById("empresaSelect");
+      empresaSelect.innerHTML = '<option value="">Todas</option>' + empresas.map(e => `<option>${e}</option>`).join("");
+
+      const cidadeSelect = document.getElementById("cidadeSelect");
+      cidadeSelect.innerHTML = '<option value="">Todas</option>' + cidades.map(c => `<option>${c}</option>`).join("");
+
+      empresaSelect.onchange = atualizarPainel;
+      cidadeSelect.onchange = atualizarPainel;
+    }
+
+    function atualizarPainel() {
+      const empresaFiltro = document.getElementById("empresaSelect").value;
+      const cidadeFiltro = document.getElementById("cidadeSelect").value;
+      const filtrados = dados.filter(d =>
+        (empresaFiltro === "" || d.Empresa === empresaFiltro) &&
+        (cidadeFiltro === "" || d["EM QUAL CIDADE MORA?"] === cidadeFiltro)
+      );
+
+      document.getElementById("indicadores").innerHTML = "";
+      document.getElementById("graficos").innerHTML = "";
+
+      perguntas.forEach(pergunta => {
+        const respostas = {};
+        filtrados.forEach(d => {
+          const r = d[pergunta];
+          if (!respostas[r]) respostas[r] = 0;
+          respostas[r]++;
+        });
+
+        // Indicadores
+        const total = Object.values(respostas).reduce((a, b) => a + b, 0);
+        const otimos = respostas["Ótimo"] || 0;
+        const bom = respostas["Bom"] || 0;
+        const ruim = respostas["Ruim"] || 0;
+
+        const card = `
+          <div class="col-md-4">
+            <div class="card">
+              <div class="card-body">
+                <h5 class="card-title">${pergunta}</h5>
+                <p>👍 Ótimo: ${((otimos / total) * 100).toFixed(1) || 0}%</p>
+                <p>👌 Bom: ${((bom / total) * 100).toFixed(1) || 0}%</p>
+                <p>👎 Ruim: ${((ruim / total) * 100).toFixed(1) || 0}%</p>
+              </div>
+            </div>
+          </div>`;
+        document.getElementById("indicadores").innerHTML += card;
+
+        // Gráfico
+        const canvasId = pergunta.replace(/[^a-zA-Z0-9]/g, "");
+        const grafico = `
+          <div class="col-md-6">
+            <div class="card">
+              <div class="card-body">
+                <canvas id="${canvasId}"></canvas>
+              </div>
+            </div>
+          </div>`;
+        document.getElementById("graficos").innerHTML += grafico;
+
+        setTimeout(() => {
+          new Chart(document.getElementById(canvasId), {
+            type: 'bar',
+            data: {
+              labels: Object.keys(respostas),
+              datasets: [{
+                label: pergunta,
+                data: Object.values(respostas),
+                backgroundColor: 'rgba(54, 162, 235, 0.6)'
+              }]
+            },
+            options: {
+              responsive: true,
+              plugins: {
+                legend: { display: false },
+                title: { display: false }
+              }
+            }
+          });
+        }, 100);
+      });
+    }
+  </script>
+</body>
+</html>
